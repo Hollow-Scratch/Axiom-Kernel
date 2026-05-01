@@ -5,8 +5,6 @@ section .text
 bits 64
 
 long_mode_start:
-    ; load null into all data segment registers
-
     mov ax, 0
     mov ss, ax
     mov ds, ax
@@ -14,6 +12,9 @@ long_mode_start:
     mov fs, ax
     mov gs, ax
 
+    mov rdi, rbx   ; rbx is still intact
     call kernel_main
 
+.hang:
     hlt
+    jmp .hang
