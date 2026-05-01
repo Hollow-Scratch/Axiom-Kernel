@@ -2,41 +2,20 @@ section .multiboot_header
 align 8
 
 header_start:
-
-    ; magic
-    dd 0xe85250d6
-
-    ; architecture (0 = i386)
+    dd 0xE85250D6
     dd 0
-
-    ; header length
     dd header_end - header_start
+    dd -(0xE85250D6 + 0 + (header_end - header_start))
 
-    ; checksum
-    dd 0x100000000 - (0xe85250d6 + 0 + (header_end - header_start))
+align 8
+    dw 5
+    dw 0
+    dd 20
+    dd 1024
+    dd 768
+    dd 32
 
-
-    ; -------------------------
-    ; ALIGN BEFORE TAG
-    ; -------------------------
-    align 8
-
-    ; framebuffer tag
-    dw 5              ; type
-    dw 0              ; flags
-    dd 20             ; size
-
-    dd 1024           ; width
-    dd 768            ; height
-    dd 32             ; bpp
-
-
-    ; -------------------------
-    ; ALIGN BEFORE END TAG
-    ; -------------------------
-    align 8
-
-    ; end tag
+align 8
     dw 0
     dw 0
     dd 8

@@ -1,79 +1,54 @@
-ARCH = x86_64
+ARCH := x86_64
 
-CXX = x86_64-elf-g++
-AS = nasm
+CXX := x86_64-elf-g++
+AS := nasm
+GRUBMKRESCUE := grub-mkrescue
 
-# dirs
-SRC_DIR = src
-BOOT_DIR = boot
-BUILD_DIR = build
-BIN_DIR = bin
-ISO_DIR = targets/$(ARCH)/iso
+BUILD_DIR := build
+BIN_DIR := bin
+ISO_DIR := targets/$(ARCH)/iso
+LINKER_SCRIPT := targets/$(ARCH)/linker.ld
 
-# sources
-CPP_SOURCES := $(shell find $(SRC_DIR) -name "*.cpp")
-ASM_SOURCES := $(shell find $(BOOT_DIR) -name "*.asm")
+ASM_SOURCES := boot/header.asm boot/main.asm boot/main64.asm
+CPP_SOURCES := src/kernel/main.cpp
 
-CPP_OBJECTS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SOURCES))
 ASM_OBJECTS := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(ASM_SOURCES))
+CPP_OBJECTS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(CPP_SOURCES))
+OBJECTS := $(ASM_OBJECTS) $(CPP_OBJECTS)
 
-OBJECTS = $(CPP_OBJECTS) $(ASM_OBJECTS)
+KERNEL_ELF := $(BIN_DIR)/kernel.elf
+KERNEL_ISO := $(BIN_DIR)/kernel.iso
 
-# outputs
-KERNEL_ELF = $(BIN_DIR)/kernel.elf
-ISO = $(BIN_DIR)/kernel.iso
+CXXFLAGS := -std=gnu++17 -O2 -ffreestanding -fno-exceptions -fno-rtti \
+            -fno-stack-protector -fno-pic -fno-pie -mno-red-zone \
+            -Wall -Wextra -fno-asynchronous-unwind-tables
+ASFLAGS := -f elf64
+LDFLAGS := -T $(LINKER_SCRIPT) -nostdlib -no-pie -Wl,-n \
+           -Wl,--build-id=none -Wl,-z,max-page-size=0x1000
 
-# flags
-CXXFLAGS_COMMON = -ffreestanding -Wall -Wextra \
-                  -fno-exceptions -fno-rtti \
-                  -fno-stack-protector \
-                  -mno-red-zone -fno-pic -fno-pie \
-                  -fno-asynchronous-unwind-tables
+.PHONY: all run clean
 
-LDFLAGS = -T targets/$(ARCH)/linker.ld -nostdlib -no-pie
+all: $(KERNEL_ISO)
 
-# default
-CXXFLAGS = $(CXXFLAGS_COMMON) -O2
-
-all: $(ISO)
-
-debug: CXXFLAGS = $(CXXFLAGS_COMMON) -O0 -g
-debug: clean $(ISO)
-
-# link kernel
-$(KERNEL_ELF): $(OBJECTS)
+$(KERNEL_ELF): $(OBJECTS) $(LINKER_SCRIPT)
 	mkdir -p $(BIN_DIR)
-	$(CXX) $(LDFLAGS) $(OBJECTS) -o $(KERNEL_ELF)
+	$(CXX) $(OBJECTS) $(LDFLAGS) -o $(KERNEL_ELF)
 
-# build ISO
-$(ISO): $(KERNEL_ELF)
-	mkdir -p $(ISO_DIR)/boot/grub
+$(KERNEL_ISO): $(KERNEL_ELF) targets/$(ARCH)/iso/boot/grub/grub.cfg
+	mkdir -p $(ISO_DIR)/boot
 	cp $(KERNEL_ELF) $(ISO_DIR)/boot/kernel.elf
-	grub-mkrescue -o $(ISO) $(ISO_DIR)
+	$(GRUBMKRESCUE) -o $(KERNEL_ISO) $(ISO_DIR)
 
-# compile C++
+$(BUILD_DIR)/%.o: %.asm
+	mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) $< -o $@
+
 $(BUILD_DIR)/%.o: %.cpp
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# compile ASM
-$(BUILD_DIR)/%.o: %.asm
-	mkdir -p $(dir $@)
-	$(AS) -f elf64 $< -o $@
+run: $(KERNEL_ISO)
+	qemu-system-x86_64 -cdrom $(KERNEL_ISO) -vga std
 
-# run
-run: $(ISO)
-	qemu-system-x86_64 \
-		-cdrom $(ISO) \
-		-vga std
-
-# debug run
-debug-run: $(ISO)
-	qemu-system-x86_64 \
-		-cdrom $(ISO) \
-		-vga std \
-		-s -S
-
-# clean
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
